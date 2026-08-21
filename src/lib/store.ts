@@ -1,4 +1,4 @@
-import type { Month, Settings } from '../types'
+import type { Ledger, Month, Settings } from '../types'
 import {
   deleteFile,
   getJsonFile,
@@ -28,6 +28,8 @@ export interface DataStore {
   readonly kind: 'local' | 'github'
   loadSettings(): Promise<Settings | null>
   saveSettings(settings: Settings, force?: boolean): Promise<void>
+  loadLedger(): Promise<Ledger | null>
+  saveLedger(ledger: Ledger, force?: boolean): Promise<void>
   listMonths(): Promise<string[]>
   loadMonth(monthId: string): Promise<Month | null>
   saveMonth(month: Month, force?: boolean): Promise<void>
@@ -64,6 +66,7 @@ export function createStore(cfg: StoreConfig): DataStore {
 // ---------- local-only store (browser storage) ----------
 
 const LS_SETTINGS = 'et.settings'
+const LS_LEDGER = 'et.ledger'
 const LS_MONTHS_INDEX = 'et.monthIndex'
 const lsMonthKey = (id: string) => `et.month.${id}`
 
@@ -77,6 +80,15 @@ class LocalStore implements DataStore {
 
   async saveSettings(settings: Settings): Promise<void> {
     localStorage.setItem(LS_SETTINGS, JSON.stringify(settings))
+  }
+
+  async loadLedger(): Promise<Ledger | null> {
+    const raw = localStorage.getItem(LS_LEDGER)
+    return raw ? (JSON.parse(raw) as Ledger) : null
+  }
+
+  async saveLedger(ledger: Ledger): Promise<void> {
+    localStorage.setItem(LS_LEDGER, JSON.stringify(ledger))
   }
 
   async listMonths(): Promise<string[]> {
@@ -124,6 +136,7 @@ class LocalStore implements DataStore {
 // ConflictError rather than an overwrite (unless the caller forces it).
 
 const SETTINGS_PATH = 'settings.json'
+const LEDGER_PATH = 'ledger.json'
 const monthPath = (id: string) => `data/${id}.json`
 
 class GitHubStore implements DataStore {
@@ -162,6 +175,17 @@ class GitHubStore implements DataStore {
 
   async saveSettings(settings: Settings, force?: boolean): Promise<void> {
     await this.put(SETTINGS_PATH, settings, 'Update settings', force)
+  }
+
+  async loadLedger(): Promise<Ledger | null> {
+    const res = await getJsonFile<Ledger>(this.cfg, LEDGER_PATH)
+    if (!res) return null
+    this.shas.set(LEDGER_PATH, res.sha)
+    return res.data
+  }
+
+  async saveLedger(ledger: Ledger, force?: boolean): Promise<void> {
+    await this.put(LEDGER_PATH, ledger, 'Update ledger', force)
   }
 
   async listMonths(): Promise<string[]> {

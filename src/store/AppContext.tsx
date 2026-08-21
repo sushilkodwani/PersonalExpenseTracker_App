@@ -1,10 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { CommitInfo } from '../lib/github'
-import type { ExpenseItem, Month, Person, Settings } from '../types'
+import type { ExpenseItem, Ledger, Month, Person, Settings } from '../types'
 import { PEOPLE } from '../types'
 import { carryItems } from '../lib/compute'
 import { defaultSettings, normalizeSettings } from '../lib/defaults'
+import { emptyLedger } from '../lib/ledger'
 import { uuid } from '../lib/uuid'
 import {
   ConflictError,
@@ -29,6 +30,7 @@ interface AppState {
   ready: boolean
   storeKind: 'local' | 'github' | null
   settings: Settings | null
+  ledger: Ledger | null
   monthIds: string[]
   months: Record<string, Month>
   saveState: SaveState
@@ -38,6 +40,7 @@ interface AppState {
   configure: (cfg: StoreConfig) => Promise<void>
   disconnect: () => void
   updateSettings: (next: Settings) => void
+  updateLedger: (next: Ledger) => void
   loadMonth: (monthId: string) => Promise<Month | null>
   loadAllMonths: () => Promise<void>
   createMonth: (monthId: string, salaries: Record<Person, number>) => Promise<Month>
@@ -65,6 +68,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<DataStore | null>(null)
   const [ready, setReady] = useState(false)
   const [settings, setSettings] = useState<Settings | null>(null)
+  const [ledger, setLedger] = useState<Ledger | null>(null)
   const [monthIds, setMonthIds] = useState<string[]>([])
   const [months, setMonths] = useState<Record<string, Month>>({})
   const [saveState, setSaveState] = useState<SaveState>('idle')
@@ -90,8 +94,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       effective = defaultSettings()
       await s.saveSettings(effective)
     }
+    const loadedLedger = await s.loadLedger()
+    const effectiveLedger = loadedLedger ?? emptyLedger()
+    if (!loadedLedger) await s.saveLedger(effectiveLedger)
+
     const ids = await s.listMonths()
     setSettings(effective)
+    setLedger(effectiveLedger)
     setMonthIds(ids)
     setMonths({})
     setStore(s)
@@ -124,6 +133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearStoreConfig()
     setStore(null)
     setSettings(null)
+    setLedger(null)
     setMonthIds([])
     setMonths({})
   }, [])
@@ -156,6 +166,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (next: Settings) => {
       setSettings(next)
       if (store) persist('settings', () => store.saveSettings(next, true))
+    },
+    [store, persist],
+  )
+
+  const updateLedger = useCallback(
+    (next: Ledger) => {
+      setLedger(next)
+      if (store) persist('ledger', () => store.saveLedger(next, true))
     },
     [store, persist],
   )
@@ -331,6 +349,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ready,
         storeKind: store?.kind ?? null,
         settings,
+        ledger,
         monthIds,
         months,
         saveState,
@@ -340,6 +359,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         configure,
         disconnect,
         updateSettings,
+        updateLedger,
         loadMonth,
         loadAllMonths,
         createMonth,

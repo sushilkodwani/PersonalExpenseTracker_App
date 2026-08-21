@@ -4,6 +4,7 @@ import { ExpenseModal, type ExpensePrefill } from '../components/ExpenseModal'
 import { PrintReport } from '../components/PrintReport'
 import { PromptDialog } from '../components/PromptDialog'
 import { SwipeRow } from '../components/SwipeRow'
+import { UndoSnackbar } from '../components/UndoSnackbar'
 import { collectNameStats } from '../lib/history'
 import {
   categoryTotals,
@@ -30,6 +31,9 @@ export function MonthView({ month }: { month: Month }) {
   const [confirmRemoveSectionId, setConfirmRemoveSectionId] = useState<string | null>(null)
   const [showUnlockPrompt, setShowUnlockPrompt] = useState(false)
   const [unlockError, setUnlockError] = useState<string | null>(null)
+  const [pendingUndo, setPendingUndo] = useState<{ person: Person; sectionId: string; item: ExpenseItem; index: number } | null>(
+    null,
+  )
 
   useEffect(() => {
     void loadAllMonths()
@@ -51,12 +55,19 @@ export function MonthView({ month }: { month: Month }) {
   const sectionName = (id: string) => settings.sections.find((s) => s.id === id)?.name ?? '(deleted)'
   const categoryName = (id: string) => settings.categories.find((c) => c.id === id)?.name ?? '(deleted)'
 
-  function patchPerson(update: (sections: SectionInstance[]) => SectionInstance[]) {
+  // Parameterized on the target person so undo can restore into whichever
+  // person's sections the item was deleted from, even if the tab has changed since.
+  function patchPersonOf(targetPerson: Person, update: (sections: SectionInstance[]) => SectionInstance[]) {
     if (month.locked) return
+    const target = month.people[targetPerson]
     updateMonth({
       ...month,
-      people: { ...month.people, [person]: { ...pm, sections: update(pm.sections) } },
+      people: { ...month.people, [targetPerson]: { ...target, sections: update(target.sections) } },
     })
+  }
+
+  function patchPerson(update: (sections: SectionInstance[]) => SectionInstance[]) {
+    patchPersonOf(person, update)
   }
 
   function saveItem(sectionId: string, item: ExpenseItem) {
@@ -71,10 +82,29 @@ export function MonthView({ month }: { month: Month }) {
   }
 
   function deleteItem(sectionId: string, itemId: string) {
+    const section = pm.sections.find((s) => s.sectionId === sectionId)
+    const index = section?.items.findIndex((i) => i.id === itemId) ?? -1
+    const item = section?.items[index]
+
     patchPerson((sections) =>
       sections.map((s) => (s.sectionId === sectionId ? { ...s, items: s.items.filter((i) => i.id !== itemId) } : s)),
     )
+    if (item) setPendingUndo({ person, sectionId, item, index })
     closeExpenseModal()
+  }
+
+  function undoDelete() {
+    if (!pendingUndo) return
+    const { person: targetPerson, sectionId, item, index } = pendingUndo
+    patchPersonOf(targetPerson, (sections) =>
+      sections.map((s) => {
+        if (s.sectionId !== sectionId) return s
+        const items = [...s.items]
+        items.splice(Math.min(index, items.length), 0, item)
+        return { ...s, items }
+      }),
+    )
+    setPendingUndo(null)
   }
 
   function closeExpenseModal() {
@@ -295,14 +325,15 @@ export function MonthView({ month }: { month: Month }) {
                 </button>
 
                 {isOpen && (
-                  <div className="border-t border-slate-100 dark:border-slate-800">
+                  <div className="border-t border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
                     {section.items.map((item) => (
                       <SwipeRow
                         key={item.id}
                         disabled={locked}
+                        contentClassName="bg-slate-50 dark:bg-slate-800"
                         onDelete={() => deleteItem(section.sectionId, item.id)}
                       >
-                        <div className="flex items-center gap-3 px-4 py-2.5">
+                        <div className="flex items-center gap-3 py-2.5 pl-7 pr-4">
                           <input
                             type="checkbox"
                             className="h-4 w-4 shrink-0"
@@ -316,14 +347,22 @@ export function MonthView({ month }: { month: Month }) {
                             onClick={() => setEditing({ sectionId: section.sectionId, item })}
                           >
                             <div>
-                              <div className={item.paid ? 'text-slate-400 line-through dark:text-slate-500' : ''}>{item.name}</div>
+                              <div
+                                className={
+                                  item.paid
+                                    ? 'text-slate-400 line-through dark:text-slate-500'
+                                    : 'text-slate-600 dark:text-slate-300'
+                                }
+                              >
+                                {item.name}
+                              </div>
                               <div className="text-xs muted">
                                 {categoryName(item.categoryId)}
                                 {item.isTransfer && ' · pass-through'}
                                 {item.carryToNextMonth && ' · carries over'}
                               </div>
                             </div>
-                            <div className={`font-medium ${item.isTransfer ? 'text-sky-600' : ''}`}>
+                            <div className={`font-medium ${item.isTransfer ? 'text-sky-600' : 'text-slate-700 dark:text-slate-300'}`}>
                               {fmt(item.amount)}
                               {item.isTransfer && <span className="text-xs"> (T)</span>}
                             </div>
@@ -333,7 +372,7 @@ export function MonthView({ month }: { month: Month }) {
                     ))}
 
                     {quickAdds.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-4 py-2.5 dark:border-slate-800">
+                      <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-4 py-2.5 pl-7 dark:border-slate-800">
                         {quickAdds.map((q) => (
                           <button
                             key={q.name}
@@ -443,6 +482,14 @@ export function MonthView({ month }: { month: Month }) {
             setShowUnlockPrompt(false)
             setUnlockError(null)
           }}
+        />
+      )}
+
+      {pendingUndo && (
+        <UndoSnackbar
+          message={`Deleted “${pendingUndo.item.name}”`}
+          onUndo={undoDelete}
+          onDismiss={() => setPendingUndo(null)}
         />
       )}
     </div>

@@ -10,6 +10,8 @@ import { MonthListScreen } from './screens/MonthListScreen'
 import { MonthView } from './screens/MonthView'
 import { NewMonthWizard } from './screens/NewMonthWizard'
 import { isSessionUnlocked } from './lib/session'
+import { PeopleScreen } from './screens/PeopleScreen'
+import { PersonLedgerScreen } from './screens/PersonLedgerScreen'
 import { PinGate } from './screens/PinGate'
 import { RecurringScreen } from './screens/RecurringScreen'
 import { SearchScreen } from './screens/SearchScreen'
@@ -18,7 +20,7 @@ import { SettingsScreen, type SettingsSubScreen } from './screens/SettingsScreen
 import { SetupScreen } from './screens/SetupScreen'
 import { useApp } from './store/AppContext'
 
-type Tab = 'month' | 'search' | 'charts' | 'settings'
+type Tab = 'month' | 'people' | 'search' | 'charts' | 'settings'
 type SubScreen = SettingsSubScreen | null
 
 const SUB_SCREEN_TITLES: Record<NonNullable<SubScreen>, string> = {
@@ -35,6 +37,7 @@ export default function App() {
     ready,
     storeKind,
     settings,
+    ledger,
     monthIds,
     months,
     loadMonth,
@@ -48,6 +51,7 @@ export default function App() {
   const [showingDetail, setShowingDetail] = useState(false)
   const [subScreen, setSubScreen] = useState<SubScreen>(null)
   const [monthId, setMonthId] = useState<string | null>(null)
+  const [contactId, setContactId] = useState<string | null>(null)
   const [showWizard, setShowWizard] = useState(false)
   const [unlocked, setUnlocked] = useState(isSessionUnlocked)
 
@@ -74,11 +78,14 @@ export default function App() {
 
   const month = monthId ? months[monthId] : null
   const inMonthDetail = tab === 'month' && showingDetail && monthIds.length > 0
+  const inPersonDetail = tab === 'people' && !!contactId
+  const contactName = contactId ? ledger?.contacts.find((c) => c.id === contactId)?.name : null
 
   function goToTab(t: Tab) {
     setTab(t)
     setSubScreen(null)
     if (t === 'month') setShowingDetail(false)
+    if (t === 'people') setContactId(null)
   }
 
   function openMonth(id: string) {
@@ -86,6 +93,12 @@ export default function App() {
     setShowingDetail(true)
     setSubScreen(null)
     setTab('month')
+  }
+
+  function openPerson(id: string) {
+    setContactId(id)
+    setSubScreen(null)
+    setTab('people')
   }
 
   const headerTitle = subScreen
@@ -96,7 +109,9 @@ export default function App() {
         ? 'Search'
         : tab === 'settings'
           ? 'Settings'
-          : 'Months'
+          : tab === 'people'
+            ? 'People'
+            : 'Months'
 
   return (
     <div className="mx-auto min-h-screen max-w-2xl">
@@ -123,6 +138,13 @@ export default function App() {
                   </option>
                 ))}
               </select>
+            </div>
+          ) : inPersonDetail && !subScreen ? (
+            <div className="flex items-center gap-1">
+              <button className="-ml-1 px-2 text-xl muted" onClick={() => setContactId(null)} aria-label="Back to people">
+                ‹
+              </button>
+              <h1 className="text-lg font-bold">{contactName ?? 'Person'}</h1>
             </div>
           ) : subScreen ? (
             <div className="flex items-center gap-1">
@@ -175,6 +197,8 @@ export default function App() {
             ) : (
               <MonthListScreen onSelect={openMonth} onCreateNew={() => setShowWizard(true)} />
             ))}
+          {tab === 'people' &&
+            (inPersonDetail ? <PersonLedgerScreen contactId={contactId!} /> : <PeopleScreen onSelect={openPerson} />)}
           {tab === 'search' && <SearchScreen onOpenMonth={openMonth} />}
           {tab === 'charts' && <ChartsScreen monthId={monthId} />}
           {tab === 'settings' && <SettingsScreen onNavigate={setSubScreen} />}
@@ -187,6 +211,7 @@ export default function App() {
           {(
             [
               ['month', '📒', 'Month'],
+              ['people', '🤝', 'People'],
               ['search', '🔍', 'Search'],
               ['charts', '📊', 'Charts'],
               ['settings', '⚙️', 'Settings'],

@@ -68,6 +68,27 @@ export interface Month {
   locked?: boolean
 }
 
+/** Someone outside the household you either owe money to or are owed by. */
+export interface LedgerContact {
+  id: string
+  name: string
+}
+
+export interface LedgerEntry {
+  id: string
+  contactId: string
+  /** 'give' = money you owe them (shown green). 'take' = money they owe you (shown red). */
+  type: 'give' | 'take'
+  amount: number
+  note?: string
+  date: string // YYYY-MM-DD
+}
+
+export interface Ledger {
+  contacts: LedgerContact[]
+  entries: LedgerEntry[]
+}
+
 export const PEOPLE: Person[] = ['sush', 'khush']
 
 export const PERSON_LABELS: Record<Person, string> = {
