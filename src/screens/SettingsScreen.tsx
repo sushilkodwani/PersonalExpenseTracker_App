@@ -63,8 +63,30 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSu
       .catch((e) => setImportError((e as Error).message))
   }
 
+  function hardRefresh() {
+    // Clear service worker cache and reload
+    if ('caches' in window) {
+      caches.keys().then((names) => {
+        names.forEach((name) => caches.delete(name))
+      })
+    }
+    // Force reload from server
+    window.location.reload()
+  }
+
   return (
     <div className="flex flex-col gap-6 p-4 pb-24">
+      {/* General */}
+      <section>
+        <h2 className="mb-2 text-lg font-semibold">General</h2>
+        <div className="card p-4">
+          <button className="w-full text-left font-medium text-indigo-600" onClick={hardRefresh}>
+            Refresh app
+          </button>
+          <p className="mt-2 text-xs muted">Clears cache and reloads. Use this if changes aren't showing up.</p>
+        </div>
+      </section>
+
       {/* Master lists — these are the ones that keep growing, so each gets its own screen */}
       <section>
         <h2 className="mb-2 text-lg font-semibold">Master lists</h2>
