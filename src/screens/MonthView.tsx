@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ExpenseModal, type ExpensePrefill } from '../components/ExpenseModal'
+import { MonthEditDialog } from '../components/MonthEditDialog'
 import { PrintReport } from '../components/PrintReport'
 import { PromptDialog } from '../components/PromptDialog'
 import { SwipeRow } from '../components/SwipeRow'
@@ -28,6 +29,7 @@ export function MonthView({ month }: { month: Month }) {
   const [editing, setEditing] = useState<{ sectionId: string; item: ExpenseItem } | null>(null)
   const [showAddSection, setShowAddSection] = useState(false)
   const [editingSalary, setEditingSalary] = useState(false)
+  const [showEditMonth, setShowEditMonth] = useState(false)
   const [confirmRemoveSectionId, setConfirmRemoveSectionId] = useState<string | null>(null)
   const [showUnlockPrompt, setShowUnlockPrompt] = useState(false)
   const [unlockError, setUnlockError] = useState<string | null>(null)
@@ -256,6 +258,9 @@ export function MonthView({ month }: { month: Month }) {
             <span className="flex gap-4">
               <button className="text-xs font-semibold text-indigo-600" onClick={() => window.print()}>
                 Print / PDF
+              </button>
+              <button className="text-xs font-semibold text-indigo-600" disabled={locked} onClick={() => setShowEditMonth(true)}>
+                Edit
               </button>
               <button
                 className="text-xs font-semibold text-indigo-600"
@@ -490,6 +495,23 @@ export function MonthView({ month }: { month: Month }) {
           message={`Deleted “${pendingUndo.item.name}”`}
           onUndo={undoDelete}
           onDismiss={() => setPendingUndo(null)}
+        />
+      )}
+
+      {showEditMonth && (
+        <MonthEditDialog
+          month={month}
+          onSave={(sushSalary, khushSalary) => {
+            updateMonth({
+              ...month,
+              people: {
+                sush: { ...month.people.sush, salary: sushSalary },
+                khush: { ...month.people.khush, salary: khushSalary },
+              },
+            })
+            setShowEditMonth(false)
+          }}
+          onClose={() => setShowEditMonth(false)}
         />
       )}
     </div>

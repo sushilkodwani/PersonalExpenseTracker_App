@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { MonthEditDialog } from '../components/MonthEditDialog'
 import { SwipeRow } from '../components/SwipeRow'
 import { fmt, monthLabel, monthSalary, monthSpend } from '../lib/compute'
 import { useApp } from '../store/AppContext'
@@ -12,9 +11,8 @@ export function MonthListScreen({
   onSelect: (monthId: string) => void
   onCreateNew: () => void
 }) {
-  const { monthIds, months, loadAllMonths, deleteMonth, updateMonth } = useApp()
+  const { monthIds, months, loadAllMonths, deleteMonth } = useApp()
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const sortedIds = [...monthIds].sort().reverse()
 
@@ -39,7 +37,7 @@ export function MonthListScreen({
 
   return (
     <div className="flex flex-col gap-3 p-4 pb-24">
-      <p className="px-1 text-xs muted">Swipe a month left to delete it, or tap the edit button.</p>
+      <p className="px-1 text-xs muted">Swipe a month left to delete it.</p>
 
       {sortedIds.map((id) => {
         const m = months[id]
@@ -57,38 +55,30 @@ export function MonthListScreen({
         return (
           // Locked months can't be swiped away — unlock first, which is the
           // whole point of locking a finalized month.
-          <div key={id} className="card flex">
-            <SwipeRow className="flex-1" disabled={m.locked} onDelete={() => setPendingDelete(id)}>
-              <button className="w-full p-4 text-left active:bg-slate-50 dark:active:bg-slate-800" onClick={() => onSelect(id)}>
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1.5 font-semibold">
-                      {monthLabel(id)}
-                      {m.locked && <span title="Locked">🔒</span>}
-                    </div>
-                    <div className="text-xs muted">
-                      Salary {fmt(salary)} · Spent {fmt(spend)}
-                    </div>
+          <SwipeRow key={id} className="card" disabled={m.locked} onDelete={() => setPendingDelete(id)}>
+            <button className="w-full p-4 text-left active:bg-slate-50 dark:active:bg-slate-800" onClick={() => onSelect(id)}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    {monthLabel(id)}
+                    {m.locked && <span title="Locked">🔒</span>}
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs muted">Saved</div>
-                    <div className={`font-semibold ${save >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(save)}</div>
+                  <div className="text-xs muted">
+                    Salary {fmt(salary)} · Spent {fmt(spend)}
                   </div>
                 </div>
-                {salary > 0 && (
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div className={`h-full ${spend > salary ? 'bg-red-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
-                  </div>
-                )}
-              </button>
-            </SwipeRow>
-            <button
-              className="shrink-0 border-l border-slate-200 px-4 py-3 text-sm font-medium text-indigo-600 active:bg-slate-50 dark:border-slate-700 dark:active:bg-slate-800"
-              onClick={() => setEditingId(id)}
-            >
-              Edit
+                <div className="text-right">
+                  <div className="text-xs muted">Saved</div>
+                  <div className={`font-semibold ${save >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(save)}</div>
+                </div>
+              </div>
+              {salary > 0 && (
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div className={`h-full ${spend > salary ? 'bg-red-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
+                </div>
+              )}
             </button>
-          </div>
+          </SwipeRow>
         )
       })}
 
@@ -110,24 +100,6 @@ export function MonthListScreen({
             }
           }}
           onCancel={() => setPendingDelete(null)}
-        />
-      )}
-
-      {editingId && months[editingId] && (
-        <MonthEditDialog
-          month={months[editingId]}
-          onSave={(sushSalary, khushSalary) => {
-            const m = months[editingId]
-            updateMonth({
-              ...m,
-              people: {
-                sush: { ...m.people.sush, salary: sushSalary },
-                khush: { ...m.people.khush, salary: khushSalary },
-              },
-            })
-            setEditingId(null)
-          }}
-          onClose={() => setEditingId(null)}
         />
       )}
     </div>
