@@ -57,39 +57,38 @@ export function MonthListScreen({
         return (
           // Locked months can't be swiped away — unlock first, which is the
           // whole point of locking a finalized month.
-          <SwipeRow key={id} className="card" disabled={m.locked} onDelete={() => setPendingDelete(id)}>
-            <button className="w-full p-4 text-left active:bg-slate-50 dark:active:bg-slate-800" onClick={() => onSelect(id)}>
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5 font-semibold">
-                    {monthLabel(id)}
-                    {m.locked && <span title="Locked">🔒</span>}
+          <div key={id} className="card flex">
+            <SwipeRow className="flex-1" disabled={m.locked} onDelete={() => setPendingDelete(id)}>
+              <button className="w-full p-4 text-left active:bg-slate-50 dark:active:bg-slate-800" onClick={() => onSelect(id)}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      {monthLabel(id)}
+                      {m.locked && <span title="Locked">🔒</span>}
+                    </div>
+                    <div className="text-xs muted">
+                      Salary {fmt(salary)} · Spent {fmt(spend)}
+                    </div>
                   </div>
-                  <div className="text-xs muted">
-                    Salary {fmt(salary)} · Spent {fmt(spend)}
+                  <div className="text-right">
+                    <div className="text-xs muted">Saved</div>
+                    <div className={`font-semibold ${save >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(save)}</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-xs muted">Saved</div>
-                  <div className={`font-semibold ${save >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(save)}</div>
-                </div>
-              </div>
-              {salary > 0 && (
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                  <div className={`h-full ${spend > salary ? 'bg-red-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
-                </div>
-              )}
-            </button>
+                {salary > 0 && (
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                    <div className={`h-full ${spend > salary ? 'bg-red-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+              </button>
+            </SwipeRow>
             <button
               className="shrink-0 border-l border-slate-200 px-4 py-3 text-sm font-medium text-indigo-600 active:bg-slate-50 dark:border-slate-700 dark:active:bg-slate-800"
-              onClick={(e) => {
-                e.stopPropagation()
-                setEditingId(id)
-              }}
+              onClick={() => setEditingId(id)}
             >
               Edit
             </button>
-          </SwipeRow>
+          </div>
         )
       })}
 
