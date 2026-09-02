@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { AccessControlScreen } from './screens/AccessControlScreen'
+import { AccessDeniedScreen } from './screens/AccessDeniedScreen'
 import { ConflictDialog } from './components/ConflictDialog'
 import { monthLabel } from './lib/compute'
 import { BudgetsScreen } from './screens/BudgetsScreen'
@@ -30,6 +32,7 @@ const SUB_SCREEN_TITLES: Record<NonNullable<SubScreen>, string> = {
   budgets: 'Budgets & goal',
   import: 'Import',
   history: 'History',
+  access: 'Access control',
 }
 
 export default function App() {
@@ -46,6 +49,8 @@ export default function App() {
     clearError,
     conflict,
     resolveConflict,
+    role,
+    canEdit,
   } = useApp()
   const [tab, setTab] = useState<Tab>('month')
   const [showingDetail, setShowingDetail] = useState(false)
@@ -71,6 +76,8 @@ export default function App() {
   }
 
   if (!storeKind) return <SetupScreen />
+
+  if (role === 'denied') return <AccessDeniedScreen />
 
   if (settings?.appPin && !unlocked) {
     return <PinGate pin={settings.appPin} onUnlock={() => setUnlocked(true)} />
@@ -158,11 +165,12 @@ export default function App() {
           )}
           <div className="flex items-center gap-3">
             <span className="text-xs muted">
+              {role === 'view' && <span className="font-medium text-amber-600">👁 View only</span>}
               {saveState === 'saving' && 'Saving…'}
               {saveState === 'saved' && '✓ Saved'}
               {saveState === 'error' && <span className="text-red-500">Save failed</span>}
             </span>
-            {tab === 'month' && !subScreen && (
+            {tab === 'month' && !subScreen && canEdit && (
               <button className="rounded-full bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white" onClick={() => setShowWizard(true)}>
                 + Month
               </button>
@@ -188,6 +196,7 @@ export default function App() {
       {subScreen === 'budgets' && <BudgetsScreen />}
       {subScreen === 'import' && <ImportScreen onDone={() => monthId && openMonth(monthId)} />}
       {subScreen === 'history' && <HistoryScreen onDone={() => monthId && openMonth(monthId)} />}
+      {subScreen === 'access' && <AccessControlScreen />}
 
       {!subScreen && (
         <>

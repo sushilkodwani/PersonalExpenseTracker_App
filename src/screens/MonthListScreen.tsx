@@ -11,7 +11,7 @@ export function MonthListScreen({
   onSelect: (monthId: string) => void
   onCreateNew: () => void
 }) {
-  const { monthIds, months, loadAllMonths, deleteMonth } = useApp()
+  const { monthIds, months, loadAllMonths, deleteMonth, canEdit } = useApp()
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const sortedIds = [...monthIds].sort().reverse()
@@ -25,19 +25,22 @@ export function MonthListScreen({
       <div className="flex flex-col items-center gap-4 p-10 text-center">
         <div className="text-5xl">🗓️</div>
         <p className="muted">
-          No months yet. Start your first month — enter the salaries and your template sections will be created
-          automatically.
+          {canEdit
+            ? 'No months yet. Start your first month — enter the salaries and your template sections will be created automatically.'
+            : 'No months yet.'}
         </p>
-        <button className="btn-primary" onClick={onCreateNew}>
-          Start first month
-        </button>
+        {canEdit && (
+          <button className="btn-primary" onClick={onCreateNew}>
+            Start first month
+          </button>
+        )}
       </div>
     )
   }
 
   return (
     <div className="flex flex-col gap-3 p-4 pb-24">
-      <p className="px-1 text-xs muted">Swipe a month left to delete it.</p>
+      {canEdit && <p className="px-1 text-xs muted">Swipe a month left to delete it.</p>}
 
       {sortedIds.map((id) => {
         const m = months[id]
@@ -55,7 +58,7 @@ export function MonthListScreen({
         return (
           // Locked months can't be swiped away — unlock first, which is the
           // whole point of locking a finalized month.
-          <SwipeRow key={id} className="card" disabled={m.locked} onDelete={() => setPendingDelete(id)}>
+          <SwipeRow key={id} className="card" disabled={m.locked || !canEdit} onDelete={() => setPendingDelete(id)}>
             <button className="w-full p-4 text-left active:bg-slate-50 dark:active:bg-slate-800" onClick={() => onSelect(id)}>
               <div className="flex items-center justify-between">
                 <div>

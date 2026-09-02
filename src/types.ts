@@ -26,6 +26,13 @@ export interface RecurringItem {
   active: boolean
 }
 
+export type UserAccessRole = 'view' | 'edit'
+
+export interface UserAccessEntry {
+  email: string
+  role: UserAccessRole
+}
+
 export interface Settings {
   sections: SectionDef[]
   categories: Category[]
@@ -40,6 +47,12 @@ export interface Settings {
   appPin?: string
   /** Password required to unlock a finalized month for editing. */
   monthLockPassword?: string
+  /**
+   * Emails (other than the hardcoded admin) allowed to access this data, and
+   * whether they can edit or only view. Enforced client-side only — anyone
+   * holding the same GitHub token could bypass this via the API directly.
+   */
+  userAccess?: UserAccessEntry[]
 }
 
 export interface ExpenseItem {

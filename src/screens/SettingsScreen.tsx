@@ -7,10 +7,23 @@ import { clearSessionUnlock } from '../lib/session'
 import { useApp } from '../store/AppContext'
 import { useTheme, type ThemePref } from '../store/ThemeContext'
 
-export type SettingsSubScreen = 'sections' | 'categories' | 'recurring' | 'budgets' | 'import' | 'history'
+export type SettingsSubScreen = 'sections' | 'categories' | 'recurring' | 'budgets' | 'import' | 'history' | 'access'
 
 export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSubScreen) => void }) {
-  const { settings, updateSettings, storeKind, disconnect, monthIds, months, loadAllMonths, importBackup } = useApp()
+  const {
+    settings,
+    updateSettings,
+    storeKind,
+    disconnect,
+    monthIds,
+    months,
+    loadAllMonths,
+    importBackup,
+    role,
+    currentUserEmail,
+    canEdit,
+    isAdmin,
+  } = useApp()
   const { pref, setPref } = useTheme()
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const [settingPin, setSettingPin] = useState(false)
@@ -87,6 +100,21 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSu
         </div>
       </section>
 
+      {/* Account */}
+      {currentUserEmail && (
+        <section>
+          <h2 className="mb-2 text-lg font-semibold">Account</h2>
+          <div className="card p-4 text-sm">
+            <p>Signed in as {currentUserEmail}</p>
+            <p className="mt-1 muted">
+              {role === 'admin' && 'Admin · full access'}
+              {role === 'edit' && 'Can edit'}
+              {role === 'view' && '👁 View only'}
+            </p>
+          </div>
+        </section>
+      )}
+
       {/* Master lists — these are the ones that keep growing, so each gets its own screen */}
       <section>
         <h2 className="mb-2 text-lg font-semibold">Master lists</h2>
@@ -125,40 +153,47 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSu
       </section>
 
       {/* Security */}
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">Security</h2>
-        <div className="card divide-y divider">
-          <div className="p-4 text-sm">
-            <p className="muted">
-              {settings.appPin
-                ? 'A PIN is required each time the app is opened.'
-                : 'No app PIN set. Anyone with your phone can open the app.'}
-            </p>
-            <div className="mt-3 flex gap-4">
-              <button className="font-medium text-indigo-600" onClick={() => setSettingPin(true)}>
-                {settings.appPin ? 'Change PIN' : 'Set a PIN'}
-              </button>
-              {settings.appPin && (
-                <button className="text-red-500" onClick={() => savePin('')}>
-                  Remove PIN
+      {isAdmin && (
+        <section>
+          <h2 className="mb-2 text-lg font-semibold">Security</h2>
+          <div className="card divide-y divider">
+            <MenuRow
+              label="Access control"
+              hint={`${(settings.userAccess ?? []).length + 1} with access`}
+              onClick={() => onNavigate('access')}
+            />
+            <div className="p-4 text-sm">
+              <p className="muted">
+                {settings.appPin
+                  ? 'A PIN is required each time the app is opened.'
+                  : 'No app PIN set. Anyone with your phone can open the app.'}
+              </p>
+              <div className="mt-3 flex gap-4">
+                <button className="font-medium text-indigo-600" onClick={() => setSettingPin(true)}>
+                  {settings.appPin ? 'Change PIN' : 'Set a PIN'}
                 </button>
-              )}
+                {settings.appPin && (
+                  <button className="text-red-500" onClick={() => savePin('')}>
+                    Remove PIN
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="p-4 text-sm">
+              <p className="muted">Password asked for when unlocking a locked month.</p>
+              <button className="mt-3 font-medium text-indigo-600" onClick={() => setChangingPassword(true)}>
+                Change month-lock password
+              </button>
             </div>
           </div>
-          <div className="p-4 text-sm">
-            <p className="muted">Password asked for when unlocking a locked month.</p>
-            <button className="mt-3 font-medium text-indigo-600" onClick={() => setChangingPassword(true)}>
-              Change month-lock password
-            </button>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Data */}
       <section>
         <h2 className="mb-2 text-lg font-semibold">Data</h2>
         <div className="card divide-y divider">
-          <MenuRow label="Import from Apple Notes" onClick={() => onNavigate('import')} />
+          {canEdit && <MenuRow label="Import from Apple Notes" onClick={() => onNavigate('import')} />}
           <MenuRow
             label="Version history"
             hint={storeKind === 'github' ? 'Restore any earlier save' : 'Needs GitHub storage'}
@@ -170,9 +205,11 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSu
           <button className="w-full px-4 py-3 text-left active:bg-slate-50 dark:active:bg-slate-800" onClick={exportBackup}>
             Download full backup (JSON)
           </button>
-          <button className="w-full px-4 py-3 text-left active:bg-slate-50 dark:active:bg-slate-800" onClick={() => fileRef.current?.click()}>
-            Restore from backup…
-          </button>
+          {isAdmin && (
+            <button className="w-full px-4 py-3 text-left active:bg-slate-50 dark:active:bg-slate-800" onClick={() => fileRef.current?.click()}>
+              Restore from backup…
+            </button>
+          )}
         </div>
         <input
           ref={fileRef}

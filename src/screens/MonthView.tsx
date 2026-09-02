@@ -21,7 +21,7 @@ import type { ExpenseItem, Month, Person, SectionInstance } from '../types'
 import { PEOPLE, PERSON_LABELS } from '../types'
 
 export function MonthView({ month }: { month: Month }) {
-  const { settings, updateMonth, monthIds, months, loadAllMonths } = useApp()
+  const { settings, updateMonth, monthIds, months, loadAllMonths, canEdit } = useApp()
   const [person, setPerson] = useState<Person>('sush')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [addingTo, setAddingTo] = useState<string | null>(null)
@@ -53,6 +53,9 @@ export function MonthView({ month }: { month: Month }) {
   if (!settings) return null
   const pm = month.people[person]
   const locked = !!month.locked
+  // Locking is a per-month toggle; view-only is a per-person role. Either one
+  // means no edits — everything below disables the same way for both.
+  const readOnly = locked || !canEdit
 
   const sectionName = (id: string) => settings.sections.find((s) => s.id === id)?.name ?? '(deleted)'
   const categoryName = (id: string) => settings.categories.find((c) => c.id === id)?.name ?? '(deleted)'
@@ -60,7 +63,7 @@ export function MonthView({ month }: { month: Month }) {
   // Parameterized on the target person so undo can restore into whichever
   // person's sections the item was deleted from, even if the tab has changed since.
   function patchPersonOf(targetPerson: Person, update: (sections: SectionInstance[]) => SectionInstance[]) {
-    if (month.locked) return
+    if (readOnly) return
     const target = month.people[targetPerson]
     updateMonth({
       ...month,
@@ -145,15 +148,17 @@ export function MonthView({ month }: { month: Month }) {
   }
 
   function setSalary(value: number) {
-    if (month.locked) return
+    if (readOnly) return
     updateMonth({ ...month, people: { ...month.people, [person]: { ...pm, salary: value } } })
   }
 
   function lockMonth() {
+    if (!canEdit) return
     updateMonth({ ...month, locked: true })
   }
 
   function submitUnlock(pw: string) {
+    if (!canEdit) return
     if (pw !== settings?.monthLockPassword) {
       setUnlockError('Incorrect password.')
       return
@@ -215,7 +220,7 @@ export function MonthView({ month }: { month: Month }) {
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
               <div className="text-xs muted">Salary</div>
-              {editingSalary && !locked ? (
+              {editingSalary && !readOnly ? (
                 <input
                   className="input mt-1 px-1 py-1 text-center text-sm"
                   type="number"
@@ -229,7 +234,7 @@ export function MonthView({ month }: { month: Month }) {
                   onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                 />
               ) : (
-                <button className="font-semibold disabled:cursor-default" disabled={locked} onClick={() => setEditingSalary(true)}>
+                <button className="font-semibold disabled:cursor-default" disabled={readOnly} onClick={() => setEditingSalary(true)}>
                   {fmt(pm.salary)}
                 </button>
               )}
@@ -252,22 +257,26 @@ export function MonthView({ month }: { month: Month }) {
             </div>
           )}
           <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
-            <span className={`text-xs font-medium ${locked ? 'text-amber-600' : 'muted'}`}>
-              {locked ? '🔒 Locked — no edits allowed' : 'Unlocked'}
+            <span className={`text-xs font-medium ${locked ? 'text-amber-600' : !canEdit ? 'text-amber-600' : 'muted'}`}>
+              {locked ? '🔒 Locked — no edits allowed' : !canEdit ? '👁 View only' : 'Unlocked'}
             </span>
             <span className="flex gap-4">
               <button className="text-xs font-semibold text-indigo-600" onClick={() => window.print()}>
                 Print / PDF
               </button>
-              <button className="text-xs font-semibold text-indigo-600" disabled={locked} onClick={() => setShowEditMonth(true)}>
-                Edit
-              </button>
-              <button
-                className="text-xs font-semibold text-indigo-600"
-                onClick={locked ? () => setShowUnlockPrompt(true) : lockMonth}
-              >
-                {locked ? 'Unlock' : 'Lock this month'}
-              </button>
+              {canEdit && (
+                <>
+                  <button className="text-xs font-semibold text-indigo-600" disabled={readOnly} onClick={() => setShowEditMonth(true)}>
+                    Edit
+                  </button>
+                  <button
+                    className="text-xs font-semibold text-indigo-600"
+                    onClick={locked ? () => setShowUnlockPrompt(true) : lockMonth}
+                  >
+                    {locked ? 'Unlock' : 'Lock this month'}
+                  </button>
+                </>
+              )}
             </span>
           </div>
         </div>
@@ -312,7 +321,7 @@ export function MonthView({ month }: { month: Month }) {
             const transferTotal = sectionTransfers(section)
             const allPaid = sectionFullyPaid(section)
             const isOpen = expanded[section.sectionId] ?? false
-            const quickAdds = isOpen && !locked ? quickAddsFor(section) : []
+            const quickAdds = isOpen && !readOnly ? quickAddsFor(section) : []
             return (
               <div key={section.sectionId} className="card overflow-hidden">
                 <button
@@ -334,7 +343,7 @@ export function MonthView({ month }: { month: Month }) {
                     {section.items.map((item) => (
                       <SwipeRow
                         key={item.id}
-                        disabled={locked}
+                        disabled={readOnly}
                         contentClassName="bg-slate-50 dark:bg-slate-800"
                         onDelete={() => deleteItem(section.sectionId, item.id)}
                       >
@@ -343,12 +352,12 @@ export function MonthView({ month }: { month: Month }) {
                             type="checkbox"
                             className="h-4 w-4 shrink-0"
                             checked={item.paid}
-                            disabled={locked}
+                            disabled={readOnly}
                             onChange={() => togglePaid(section.sectionId, item.id)}
                           />
                           <button
                             className="flex flex-1 items-center justify-between text-left disabled:cursor-default"
-                            disabled={locked}
+                            disabled={readOnly}
                             onClick={() => setEditing({ sectionId: section.sectionId, item })}
                           >
                             <div>
@@ -393,7 +402,7 @@ export function MonthView({ month }: { month: Month }) {
                       </div>
                     )}
 
-                    {!locked && (
+                    {!readOnly && (
                       <div className="flex justify-between border-t border-slate-100 px-4 py-2 dark:border-slate-800">
                         <button
                           className="text-sm font-medium text-indigo-600"
@@ -424,7 +433,7 @@ export function MonthView({ month }: { month: Month }) {
             )
           })}
 
-          {!locked && (
+          {!readOnly && (
             <button className="btn-secondary" onClick={() => setShowAddSection(true)}>
               + Add section
             </button>

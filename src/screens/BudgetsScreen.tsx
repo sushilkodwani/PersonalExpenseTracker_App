@@ -1,7 +1,7 @@
 import { useApp } from '../store/AppContext'
 
 export function BudgetsScreen() {
-  const { settings, updateSettings } = useApp()
+  const { settings, updateSettings, canEdit } = useApp()
   if (!settings) return null
 
   const budgets = settings.budgets ?? {}
@@ -39,6 +39,7 @@ export function BudgetsScreen() {
                   type="number"
                   inputMode="numeric"
                   placeholder="—"
+                  disabled={!canEdit}
                   defaultValue={budgets[c.id] ?? ''}
                   onBlur={(e) => setBudget(c.id, e.target.value)}
                 />
@@ -57,6 +58,7 @@ export function BudgetsScreen() {
             type="number"
             inputMode="numeric"
             placeholder="—"
+            disabled={!canEdit}
             defaultValue={settings.savingsGoalPerYear ?? ''}
             onBlur={(e) => setGoal(e.target.value)}
           />

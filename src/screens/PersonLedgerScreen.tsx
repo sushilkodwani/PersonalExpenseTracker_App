@@ -13,7 +13,7 @@ function today(): string {
 }
 
 export function PersonLedgerScreen({ contactId }: { contactId: string }) {
-  const { ledger, updateLedger } = useApp()
+  const { ledger, updateLedger, canEdit } = useApp()
   const [editing, setEditing] = useState<LedgerEntry | 'new' | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingUndo, setPendingUndo] = useState<{ entry: LedgerEntry; index: number } | null>(null)
@@ -72,9 +72,10 @@ export function PersonLedgerScreen({ contactId }: { contactId: string }) {
       ) : (
         <div className="flex flex-col gap-2">
           {entries.map((e) => (
-            <SwipeRow key={e.id} className="card" onDelete={() => setPendingDeleteId(e.id)}>
+            <SwipeRow key={e.id} className="card" disabled={!canEdit} onDelete={() => setPendingDeleteId(e.id)}>
               <button
-                className="flex w-full items-center justify-between p-4 text-left active:bg-slate-50 dark:active:bg-slate-800"
+                className="flex w-full items-center justify-between p-4 text-left active:bg-slate-50 dark:active:bg-slate-800 disabled:active:bg-transparent"
+                disabled={!canEdit}
                 onClick={() => setEditing(e)}
               >
                 <div>
@@ -95,11 +96,13 @@ export function PersonLedgerScreen({ contactId }: { contactId: string }) {
         </div>
       )}
 
-      <button className="btn-secondary" onClick={() => setEditing('new')}>
-        + Add entry
-      </button>
+      {canEdit && (
+        <button className="btn-secondary" onClick={() => setEditing('new')}>
+          + Add entry
+        </button>
+      )}
 
-      {editing && (
+      {editing && canEdit && (
         <EntryEditor
           initial={editing === 'new' ? null : editing}
           contactId={contactId}

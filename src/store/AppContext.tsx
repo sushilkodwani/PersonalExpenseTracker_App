@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { CommitInfo } from '../lib/github'
 import type { ExpenseItem, Ledger, Month, Person, Settings } from '../types'
 import { PEOPLE } from '../types'
+import { type AccessRole, clearSavedEmail, getSavedEmail, resolveRole } from '../lib/auth'
 import { carryItems } from '../lib/compute'
 import { defaultSettings, normalizeSettings } from '../lib/defaults'
 import { emptyLedger } from '../lib/ledger'
@@ -37,6 +38,12 @@ interface AppState {
   error: string | null
   conflict: Conflict | null
   supportsHistory: boolean
+  /** Access role for the email saved on this device, re-resolved from settings on every load. */
+  role: AccessRole | null
+  currentUserEmail: string | null
+  /** True for 'admin' and 'edit' roles — local-only storage is always 'admin' (single device). */
+  canEdit: boolean
+  isAdmin: boolean
   configure: (cfg: StoreConfig) => Promise<void>
   disconnect: () => void
   updateSettings: (next: Settings) => void
@@ -79,6 +86,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Kept in a ref so persist() always writes the newest version of a month,
   // even when several edits land inside one debounce window.
   const pendingMonths = useRef<Record<string, Month>>({})
+
+  // Local-only storage is single-device by definition, so there's no one else
+  // to restrict — only GitHub-synced storage re-checks the saved email's role
+  // against the freshly-loaded settings, every time the app starts.
+  const currentUserEmail = store?.kind === 'github' ? getSavedEmail() : null
+  const role: AccessRole | null = !store ? null : store.kind === 'local' ? 'admin' : resolveRole(currentUserEmail ?? '', settings)
+  const canEdit = role === 'admin' || role === 'edit'
+  const isAdmin = role === 'admin'
 
   const initFromStore = useCallback(async (s: DataStore) => {
     const loaded = await s.loadSettings()
@@ -131,6 +146,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const disconnect = useCallback(() => {
     clearStoreConfig()
+    clearSavedEmail()
     setStore(null)
     setSettings(null)
     setLedger(null)
@@ -164,18 +180,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateSettings = useCallback(
     (next: Settings) => {
+      if (!canEdit) return
       setSettings(next)
       if (store) persist('settings', () => store.saveSettings(next, true))
     },
-    [store, persist],
+    [store, persist, canEdit],
   )
 
   const updateLedger = useCallback(
     (next: Ledger) => {
+      if (!canEdit) return
       setLedger(next)
       if (store) persist('ledger', () => store.saveLedger(next, true))
     },
-    [store, persist],
+    [store, persist, canEdit],
   )
 
   const loadMonth = useCallback(
@@ -204,6 +222,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const createMonth = useCallback(
     async (monthId: string, salaries: Record<Person, number>): Promise<Month> => {
       if (!store || !settings) throw new Error('Not configured')
+      if (!canEdit) throw new Error('View-only access — you cannot create months.')
 
       const templateSections = (p: Person) =>
         settings.sections
@@ -264,21 +283,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMonthIds((prev) => (prev.includes(monthId) ? prev : [...prev, monthId].sort()))
       return month
     },
-    [store, settings, monthIds, months],
+    [store, settings, monthIds, months, canEdit],
   )
 
   const updateMonth = useCallback(
     (next: Month) => {
+      if (!canEdit) return
       setMonths((prev) => ({ ...prev, [next.id]: next }))
       pendingMonths.current[next.id] = next
       if (store) persist(`month.${next.id}`, () => store.saveMonth(pendingMonths.current[next.id] ?? next))
     },
-    [store, persist],
+    [store, persist, canEdit],
   )
 
   const deleteMonth = useCallback(
     async (monthId: string) => {
-      if (!store) return
+      if (!store || !canEdit) return
       // Cancel any in-flight debounced save so it can't recreate the file.
       clearTimeout(saveTimers.current[`month.${monthId}`])
       delete pendingMonths.current[monthId]
@@ -291,12 +311,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
       setMonthIds((prev) => prev.filter((id) => id !== monthId))
     },
-    [store],
+    [store, canEdit],
   )
 
   const resolveConflict = useCallback(
     async (choice: 'mine' | 'remote') => {
-      if (!store || !conflict) return
+      if (!store || !conflict || !canEdit) return
       if (choice === 'remote') {
         setMonths((prev) => ({ ...prev, [conflict.monthId]: conflict.remote }))
         pendingMonths.current[conflict.monthId] = conflict.remote
@@ -305,7 +325,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setConflict(null)
     },
-    [store, conflict],
+    [store, conflict, canEdit],
   )
 
   const monthHistory = useCallback(
@@ -320,17 +340,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const restoreMonth = useCallback(
     async (month: Month) => {
-      if (!store) return
+      if (!store || !canEdit) return
       await store.saveMonth(month, true)
       setMonths((prev) => ({ ...prev, [month.id]: month }))
       pendingMonths.current[month.id] = month
     },
-    [store],
+    [store, canEdit],
   )
 
   const importBackup = useCallback(
     async (nextSettings: Settings, nextMonths: Record<string, Month>) => {
-      if (!store) return
+      if (!store || !isAdmin) return
       const normalized = normalizeSettings(nextSettings)
       await store.saveSettings(normalized, true)
       for (const month of Object.values(nextMonths)) {
@@ -340,7 +360,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMonths(nextMonths)
       setMonthIds(Object.keys(nextMonths).sort())
     },
-    [store],
+    [store, isAdmin],
   )
 
   return (
@@ -356,6 +376,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         error,
         conflict,
         supportsHistory: store?.supportsHistory() ?? false,
+        role,
+        currentUserEmail,
+        canEdit,
+        isAdmin,
         configure,
         disconnect,
         updateSettings,

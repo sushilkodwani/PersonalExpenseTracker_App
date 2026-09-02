@@ -8,7 +8,7 @@ import { uuid } from '../lib/uuid'
 import { useApp } from '../store/AppContext'
 
 export function PeopleScreen({ onSelect }: { onSelect: (contactId: string) => void }) {
-  const { ledger, updateLedger } = useApp()
+  const { ledger, updateLedger, canEdit } = useApp()
   const [addingContact, setAddingContact] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
 
@@ -58,7 +58,7 @@ export function PeopleScreen({ onSelect }: { onSelect: (contactId: string) => vo
           {ledger.contacts.map((c) => {
             const balance = balanceFor(ledger, c.id)
             return (
-              <SwipeRow key={c.id} className="card" onDelete={() => setPendingDelete(c.id)}>
+              <SwipeRow key={c.id} className="card" disabled={!canEdit} onDelete={() => setPendingDelete(c.id)}>
                 <button
                   className="flex w-full items-center justify-between p-4 text-left active:bg-slate-50 dark:active:bg-slate-800"
                   onClick={() => onSelect(c.id)}
@@ -78,9 +78,11 @@ export function PeopleScreen({ onSelect }: { onSelect: (contactId: string) => vo
         </div>
       )}
 
-      <button className="btn-secondary" onClick={() => setAddingContact(true)}>
-        + Add person
-      </button>
+      {canEdit && (
+        <button className="btn-secondary" onClick={() => setAddingContact(true)}>
+          + Add person
+        </button>
+      )}
 
       {addingContact && (
         <PromptDialog

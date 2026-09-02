@@ -1,10 +1,13 @@
 import { useState } from 'react'
+import { resolveRole, saveEmail } from '../lib/auth'
 import { verifyRepoAccess } from '../lib/github'
+import { peekSettings } from '../lib/store'
 import { useApp } from '../store/AppContext'
 
 export function SetupScreen() {
   const { configure } = useApp()
   const [mode, setMode] = useState<'choose' | 'github'>('choose')
+  const [email, setEmail] = useState('')
   const [owner, setOwner] = useState('')
   const [repo, setRepo] = useState('')
   const [token, setToken] = useState('')
@@ -16,7 +19,19 @@ export function SetupScreen() {
     setError(null)
     try {
       const cfg = { token: token.trim(), owner: owner.trim(), repo: repo.trim() }
+      const normalizedEmail = email.trim().toLowerCase()
       await verifyRepoAccess(cfg)
+
+      // Check access before connecting — settings.json may not exist yet on a
+      // brand-new repo, in which case only the hardcoded admin can proceed.
+      const existing = await peekSettings(cfg)
+      const role = resolveRole(normalizedEmail, existing)
+      if (role === 'denied') {
+        setError('Access denied — this email has not been granted access. Ask the admin to add you first.')
+        return
+      }
+
+      saveEmail(normalizedEmail)
       await configure({ kind: 'github', ...cfg })
     } catch (e) {
       setError((e as Error).message)
@@ -62,6 +77,18 @@ export function SetupScreen() {
             scoped to only that repo with <b>Contents: Read and write</b> permission.
           </p>
           <label className="text-sm font-medium">
+            Your email
+            <input
+              className="input mt-1"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoCapitalize="none"
+            />
+          </label>
+          <p className="-mt-2 text-xs muted">Used to check what access you've been granted. The admin adds emails in Settings.</p>
+          <label className="text-sm font-medium">
             GitHub username
             <input className="input mt-1" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="e.g. kaushik" autoCapitalize="none" />
           </label>
@@ -75,7 +102,7 @@ export function SetupScreen() {
           </label>
           <p className="text-xs muted">The token stays in this browser only — it is never sent anywhere except api.github.com.</p>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <button className="btn-primary" disabled={busy || !owner || !repo || !token} onClick={connectGitHub}>
+          <button className="btn-primary" disabled={busy || !email.trim() || !owner || !repo || !token} onClick={connectGitHub}>
             {busy ? 'Checking…' : 'Connect'}
           </button>
           <button className="btn-secondary" onClick={() => setMode('choose')}>

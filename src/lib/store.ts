@@ -139,6 +139,15 @@ const SETTINGS_PATH = 'settings.json'
 const LEDGER_PATH = 'ledger.json'
 const monthPath = (id: string) => `data/${id}.json`
 
+/**
+ * Reads settings.json straight from the API without going through a DataStore,
+ * so the caller can check access (email allowlist) before fully connecting.
+ */
+export async function peekSettings(cfg: GitHubConfig): Promise<Settings | null> {
+  const res = await getJsonFile<Settings>(cfg, SETTINGS_PATH)
+  return res?.data ?? null
+}
+
 class GitHubStore implements DataStore {
   readonly kind = 'github' as const
   private cfg: GitHubConfig

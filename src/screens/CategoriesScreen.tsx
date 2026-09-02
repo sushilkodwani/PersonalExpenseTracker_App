@@ -6,7 +6,7 @@ import { useApp } from '../store/AppContext'
 import type { Category } from '../types'
 
 export function CategoriesScreen() {
-  const { settings, updateSettings } = useApp()
+  const { settings, updateSettings, canEdit } = useApp()
   const [newCategory, setNewCategory] = useState('')
   const [renaming, setRenaming] = useState<Category | null>(null)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
@@ -53,29 +53,33 @@ export function CategoriesScreen() {
           settings.categories.map((c) => (
             <div key={c.id} className="flex items-center justify-between px-4 py-2.5">
               <span>{c.name}</span>
-              <span className="flex gap-4 text-sm">
-                <button className="text-indigo-600" onClick={() => setRenaming(c)}>
-                  Rename
-                </button>
-                <button className="text-red-500" onClick={() => setPendingDelete(c.id)}>
-                  Delete
-                </button>
-              </span>
+              {canEdit && (
+                <span className="flex gap-4 text-sm">
+                  <button className="text-indigo-600" onClick={() => setRenaming(c)}>
+                    Rename
+                  </button>
+                  <button className="text-red-500" onClick={() => setPendingDelete(c.id)}>
+                    Delete
+                  </button>
+                </span>
+              )}
             </div>
           ))
         )}
-        <div className="flex gap-2 p-3">
-          <input
-            className="input"
-            placeholder="New category name"
-            value={newCategory}
-            onChange={(e) => setNewCategory(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && add()}
-          />
-          <button className="btn-primary" onClick={add} disabled={!newCategory.trim()}>
-            Add
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-2 p-3">
+            <input
+              className="input"
+              placeholder="New category name"
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && add()}
+            />
+            <button className="btn-primary" onClick={add} disabled={!newCategory.trim()}>
+              Add
+            </button>
+          </div>
+        )}
       </div>
 
       {pendingDelete && (

@@ -10,7 +10,7 @@ import type { Month } from '../types'
  * This screen lists those commits and can roll a month back to any of them.
  */
 export function HistoryScreen({ onDone }: { onDone: () => void }) {
-  const { monthIds, monthHistory, monthAtCommit, restoreMonth, supportsHistory } = useApp()
+  const { monthIds, monthHistory, monthAtCommit, restoreMonth, supportsHistory, canEdit } = useApp()
   const [monthId, setMonthId] = useState('')
   const [commits, setCommits] = useState<CommitInfo[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -54,7 +54,7 @@ export function HistoryScreen({ onDone }: { onDone: () => void }) {
   }
 
   async function doRestore() {
-    if (!preview) return
+    if (!preview || !canEdit) return
     await restoreMonth(preview.month)
     setPreview(null)
     setRestored(true)
@@ -112,7 +112,7 @@ export function HistoryScreen({ onDone }: { onDone: () => void }) {
         </div>
       )}
 
-      {preview && (
+      {preview && canEdit && (
         <ConfirmDialog
           title="Restore this version?"
           message={`Saved ${new Date(preview.commit.date).toLocaleString()} — ${fmt(
@@ -122,6 +122,18 @@ export function HistoryScreen({ onDone }: { onDone: () => void }) {
           )} data with a new commit; nothing in the history is lost.`}
           confirmLabel="Restore"
           onConfirm={doRestore}
+          onCancel={() => setPreview(null)}
+        />
+      )}
+
+      {preview && !canEdit && (
+        <ConfirmDialog
+          title="View only"
+          message={`Saved ${new Date(preview.commit.date).toLocaleString()} — ${fmt(
+            monthSalary(preview.month),
+          )} salary, ${fmt(monthSpend(preview.month))} spent. Restoring requires edit access.`}
+          confirmLabel="Close"
+          onConfirm={() => setPreview(null)}
           onCancel={() => setPreview(null)}
         />
       )}

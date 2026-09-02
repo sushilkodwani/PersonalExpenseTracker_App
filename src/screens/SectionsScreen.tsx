@@ -17,7 +17,7 @@ const TYPE_OPTIONS = (Object.keys(SECTION_TYPE_LABELS) as SectionType[]).map((t)
 }))
 
 export function SectionsScreen() {
-  const { settings, updateSettings } = useApp()
+  const { settings, updateSettings, canEdit } = useApp()
   const [editing, setEditing] = useState<SectionDef | 'new' | null>(null)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
 
@@ -54,7 +54,8 @@ export function SectionsScreen() {
           settings.sections.map((s) => (
             <button
               key={s.id}
-              className="flex w-full items-center justify-between px-4 py-3 text-left active:bg-slate-50 dark:active:bg-slate-800"
+              className="flex w-full items-center justify-between px-4 py-3 text-left active:bg-slate-50 dark:active:bg-slate-800 disabled:active:bg-transparent"
+              disabled={!canEdit}
               onClick={() => setEditing(s)}
             >
               <div>
@@ -64,17 +65,19 @@ export function SectionsScreen() {
                   {s.defaultInTemplate && ' · in template'}
                 </div>
               </div>
-              <span className="text-slate-300">›</span>
+              {canEdit && <span className="text-slate-300">›</span>}
             </button>
           ))
         )}
       </div>
 
-      <button className="btn-secondary" onClick={() => setEditing('new')}>
-        + Add section
-      </button>
+      {canEdit && (
+        <button className="btn-secondary" onClick={() => setEditing('new')}>
+          + Add section
+        </button>
+      )}
 
-      {editing && (
+      {editing && canEdit && (
         <SectionEditor
           initial={editing === 'new' ? null : editing}
           onSave={save}

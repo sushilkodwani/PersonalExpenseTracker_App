@@ -9,7 +9,7 @@ import type { Category, Person, RecurringItem, SectionDef } from '../types'
 import { PERSON_LABELS } from '../types'
 
 export function RecurringScreen() {
-  const { settings, updateSettings, monthIds, months, loadAllMonths } = useApp()
+  const { settings, updateSettings, monthIds, months, loadAllMonths, canEdit } = useApp()
   const [editing, setEditing] = useState<RecurringItem | 'new' | null>(null)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
 
@@ -54,7 +54,8 @@ export function RecurringScreen() {
           recurring.map((r) => (
             <button
               key={r.id}
-              className="flex w-full items-center justify-between px-4 py-3 text-left active:bg-slate-50 dark:active:bg-slate-800"
+              className="flex w-full items-center justify-between px-4 py-3 text-left active:bg-slate-50 dark:active:bg-slate-800 disabled:active:bg-transparent"
+              disabled={!canEdit}
               onClick={() => setEditing(r)}
             >
               <div>
@@ -70,11 +71,13 @@ export function RecurringScreen() {
         )}
       </div>
 
-      <button className="btn-secondary" onClick={() => setEditing('new')}>
-        + Add recurring expense
-      </button>
+      {canEdit && (
+        <button className="btn-secondary" onClick={() => setEditing('new')}>
+          + Add recurring expense
+        </button>
+      )}
 
-      {editing && (
+      {editing && canEdit && (
         <RecurringEditor
           initial={editing === 'new' ? null : editing}
           sections={settings.sections}

@@ -73,5 +73,6 @@ export function normalizeSettings(loaded: Settings): Settings {
     recurring: loaded.recurring ?? [],
     budgets: loaded.budgets ?? {},
     monthLockPassword: loaded.monthLockPassword ?? INITIAL_MONTH_LOCK_PASSWORD,
+    userAccess: loaded.userAccess ?? [],
   }
 }
