@@ -18,3 +18,14 @@ export function totalYouOwe(ledger: Ledger): number {
 }
 
 export const emptyLedger = (): Ledger => ({ contacts: [], entries: [] })
+
+/** Every note used before, most-used first — so the same note is spelled the same way everywhere. */
+export function collectNoteSuggestions(ledger: Ledger): string[] {
+  const counts = new Map<string, number>()
+  for (const e of ledger.entries) {
+    const note = e.note?.trim()
+    if (!note) continue
+    counts.set(note, (counts.get(note) ?? 0) + 1)
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([note]) => note)
+}

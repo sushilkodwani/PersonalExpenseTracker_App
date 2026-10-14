@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { SwipeRow } from '../components/SwipeRow'
+import { TextSuggestInput } from '../components/TextSuggestInput'
 import { UndoSnackbar } from '../components/UndoSnackbar'
 import { fmt } from '../lib/compute'
-import { balanceFor, entriesFor } from '../lib/ledger'
+import { balanceFor, collectNoteSuggestions, entriesFor } from '../lib/ledger'
 import { uuid } from '../lib/uuid'
 import { useApp } from '../store/AppContext'
 import type { LedgerEntry } from '../types'
@@ -12,11 +13,31 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+function formatDate(date: string): string {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Entries are already sorted newest-date-first, so adjacent same-date runs become one group. */
+function groupByDate(entries: LedgerEntry[]): { date: string; entries: LedgerEntry[]; net: number }[] {
+  const groups: { date: string; entries: LedgerEntry[]; net: number }[] = []
+  for (const e of entries) {
+    const last = groups[groups.length - 1]
+    if (last && last.date === e.date) last.entries.push(e)
+    else groups.push({ date: e.date, entries: [e], net: 0 })
+  }
+  for (const g of groups) {
+    g.net = g.entries.reduce((sum, e) => sum + (e.type === 'take' ? e.amount : -e.amount), 0)
+  }
+  return groups
+}
+
 export function PersonLedgerScreen({ contactId }: { contactId: string }) {
   const { ledger, updateLedger, canEdit } = useApp()
   const [editing, setEditing] = useState<LedgerEntry | 'new' | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingUndo, setPendingUndo] = useState<{ entry: LedgerEntry; index: number } | null>(null)
+
+  const noteSuggestions = useMemo(() => (ledger ? collectNoteSuggestions(ledger) : []), [ledger])
 
   if (!ledger) return null
   const contact = ledger.contacts.find((c) => c.id === contactId)
@@ -24,6 +45,7 @@ export function PersonLedgerScreen({ contactId }: { contactId: string }) {
 
   const entries = entriesFor(ledger, contactId)
   const balance = balanceFor(ledger, contactId)
+  const groups = groupByDate(entries)
 
   function save(entry: LedgerEntry) {
     if (!ledger) return
@@ -67,45 +89,57 @@ export function PersonLedgerScreen({ contactId }: { contactId: string }) {
         )}
       </div>
 
-      {entries.length === 0 ? (
-        <p className="card p-4 text-sm muted">No entries yet.</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {entries.map((e) => (
-            <SwipeRow key={e.id} className="card" disabled={!canEdit} onDelete={() => setPendingDeleteId(e.id)}>
-              <button
-                className="flex w-full items-center justify-between p-4 text-left active:bg-slate-50 dark:active:bg-slate-800 disabled:active:bg-transparent"
-                disabled={!canEdit}
-                onClick={() => setEditing(e)}
-              >
-                <div>
-                  <div className={`font-medium ${e.type === 'give' ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {e.type === 'give' ? 'You owe' : 'They owe you'}
-                  </div>
-                  <div className="text-xs muted">
-                    {e.date}
-                    {e.note && ` · ${e.note}`}
-                  </div>
-                </div>
-                <div className={`font-semibold ${e.type === 'give' ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {fmt(e.amount)}
-                </div>
-              </button>
-            </SwipeRow>
-          ))}
-        </div>
-      )}
-
       {canEdit && (
         <button className="btn-secondary" onClick={() => setEditing('new')}>
           + Add entry
         </button>
       )}
 
+      {entries.length === 0 ? (
+        <p className="card p-4 text-sm muted">No entries yet.</p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {groups.map((g) => (
+            <div key={g.date} className="flex flex-col gap-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-semibold muted">{formatDate(g.date)}</span>
+                <span
+                  className={`text-xs font-semibold ${g.net === 0 ? 'muted' : g.net > 0 ? 'text-red-600' : 'text-emerald-600'}`}
+                >
+                  {g.net === 0 ? 'Settled' : fmt(Math.abs(g.net))}
+                </span>
+              </div>
+              <div className="flex flex-col gap-2">
+                {g.entries.map((e) => (
+                  <SwipeRow key={e.id} className="card" disabled={!canEdit} onDelete={() => setPendingDeleteId(e.id)}>
+                    <button
+                      className="flex w-full items-center justify-between p-4 text-left active:bg-slate-50 dark:active:bg-slate-800 disabled:active:bg-transparent"
+                      disabled={!canEdit}
+                      onClick={() => setEditing(e)}
+                    >
+                      <div>
+                        <div className={`font-medium ${e.type === 'give' ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {e.note || (e.type === 'give' ? 'You owe' : 'They owe you')}
+                        </div>
+                        <div className="text-xs muted">{e.type === 'give' ? 'You owe' : 'They owe you'}</div>
+                      </div>
+                      <div className={`font-semibold ${e.type === 'give' ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {fmt(e.amount)}
+                      </div>
+                    </button>
+                  </SwipeRow>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {editing && canEdit && (
         <EntryEditor
           initial={editing === 'new' ? null : editing}
           contactId={contactId}
+          noteSuggestions={noteSuggestions}
           onSave={save}
           onDelete={editing !== 'new' ? () => setPendingDeleteId(editing.id) : undefined}
           onClose={() => setEditing(null)}
@@ -132,22 +166,24 @@ export function PersonLedgerScreen({ contactId }: { contactId: string }) {
 function EntryEditor({
   initial,
   contactId,
+  noteSuggestions,
   onSave,
   onDelete,
   onClose,
 }: {
   initial: LedgerEntry | null
   contactId: string
+  noteSuggestions: string[]
   onSave: (entry: LedgerEntry) => void
   onDelete?: () => void
   onClose: () => void
 }) {
   const [type, setType] = useState<'give' | 'take'>(initial?.type ?? 'give')
-  const [amount, setAmount] = useState(initial ? String(initial.amount) : '')
   const [note, setNote] = useState(initial?.note ?? '')
   const [date, setDate] = useState(initial?.date ?? today())
+  const [amount, setAmount] = useState(initial ? String(initial.amount) : '')
 
-  const valid = Number(amount) > 0 && date
+  const valid = note.trim() && Number(amount) > 0 && date
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/40 sm:items-center sm:justify-center" onClick={onClose}>
@@ -173,6 +209,20 @@ function EntryEditor({
             </button>
           </div>
           <label className="text-sm font-medium">
+            Note
+            <TextSuggestInput
+              value={note}
+              suggestions={noteSuggestions}
+              placeholder="e.g. Dinner split"
+              autoFocus
+              onChange={setNote}
+            />
+          </label>
+          <label className="text-sm font-medium">
+            Date
+            <input className="input mt-1" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </label>
+          <label className="text-sm font-medium">
             Amount (₹)
             <input
               className="input mt-1"
@@ -181,16 +231,7 @@ function EntryEditor({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0"
-              autoFocus
             />
-          </label>
-          <label className="text-sm font-medium">
-            Date
-            <input className="input mt-1" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-          <label className="text-sm font-medium">
-            Note (optional)
-            <input className="input mt-1" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Dinner split" />
           </label>
           <div className="mt-2 flex gap-2">
             <button
@@ -202,7 +243,7 @@ function EntryEditor({
                   contactId,
                   type,
                   amount: Number(amount),
-                  note: note.trim() || undefined,
+                  note: note.trim(),
                   date,
                 })
               }
