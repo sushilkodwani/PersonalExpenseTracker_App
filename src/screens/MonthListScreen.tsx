@@ -58,8 +58,17 @@ export function MonthListScreen({
         return (
           // Locked months can't be swiped away — unlock first, which is the
           // whole point of locking a finalized month.
-          <SwipeRow key={id} className="card" disabled={m.locked || !canEdit} onDelete={() => setPendingDelete(id)}>
-            <button className="w-full p-4 text-left active:bg-slate-50 dark:active:bg-slate-800" onClick={() => onSelect(id)}>
+          <SwipeRow
+            key={id}
+            className={m.locked ? 'card ring-1 ring-amber-200 dark:ring-amber-900/60' : 'card'}
+            contentClassName={m.locked ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-white dark:bg-slate-900'}
+            disabled={m.locked || !canEdit}
+            onDelete={() => setPendingDelete(id)}
+          >
+            <button
+              className={`w-full p-4 text-left ${m.locked ? 'active:bg-amber-100 dark:active:bg-amber-900/40' : 'active:bg-slate-50 dark:active:bg-slate-800'}`}
+              onClick={() => onSelect(id)}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-1.5 font-semibold">
