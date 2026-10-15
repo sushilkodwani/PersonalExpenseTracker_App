@@ -10,6 +10,7 @@ import { collectNameStats } from '../lib/history'
 import {
   categoryTotals,
   fmt,
+  monthLabel,
   personRemaining,
   personSpend,
   sectionFullyPaid,
@@ -31,6 +32,7 @@ export function MonthView({ month }: { month: Month }) {
   const [editingSalary, setEditingSalary] = useState(false)
   const [showEditMonth, setShowEditMonth] = useState(false)
   const [confirmRemoveSectionId, setConfirmRemoveSectionId] = useState<string | null>(null)
+  const [confirmMoveSectionId, setConfirmMoveSectionId] = useState<string | null>(null)
   const [showUnlockPrompt, setShowUnlockPrompt] = useState(false)
   const [unlockError, setUnlockError] = useState<string | null>(null)
   const [pendingUndo, setPendingUndo] = useState<{ person: Person; sectionId: string; item: ExpenseItem; index: number } | null>(
@@ -52,6 +54,7 @@ export function MonthView({ month }: { month: Month }) {
 
   if (!settings) return null
   const pm = month.people[person]
+  const otherPerson: Person = person === 'sush' ? 'khush' : 'sush'
   const locked = !!month.locked
   // Locking is a per-month toggle; view-only is a per-person role. Either one
   // means no edits — everything below disables the same way for both.
@@ -145,6 +148,31 @@ export function MonthView({ month }: { month: Month }) {
   function removeSection(sectionId: string) {
     patchPerson((sections) => sections.filter((s) => s.sectionId !== sectionId))
     setConfirmRemoveSectionId(null)
+  }
+
+  /** Moves a whole section — and every expense in it — from the current person's salary to the other's, same month. */
+  function moveSection(sectionId: string) {
+    if (readOnly) return
+    const source = month.people[person]
+    const dest = month.people[otherPerson]
+    const moving = source.sections.find((s) => s.sectionId === sectionId)
+    if (!moving) return
+
+    // If the destination already has this section (e.g. it's a shared one), merge items into it instead of duplicating.
+    const existing = dest.sections.find((s) => s.sectionId === sectionId)
+    const nextDestSections = existing
+      ? dest.sections.map((s) => (s.sectionId === sectionId ? { ...s, items: [...s.items, ...moving.items] } : s))
+      : [...dest.sections, moving]
+
+    updateMonth({
+      ...month,
+      people: {
+        ...month.people,
+        [person]: { ...source, sections: source.sections.filter((s) => s.sectionId !== sectionId) },
+        [otherPerson]: { ...dest, sections: nextDestSections },
+      },
+    })
+    setConfirmMoveSectionId(null)
   }
 
   function setSalary(value: number) {
@@ -419,6 +447,9 @@ export function MonthView({ month }: { month: Month }) {
                               Mark all paid
                             </button>
                           )}
+                          <button className="text-sm text-indigo-600" onClick={() => setConfirmMoveSectionId(section.sectionId)}>
+                            Move to {PERSON_LABELS[otherPerson]}
+                          </button>
                           {section.items.length === 0 && (
                             <button className="text-sm muted" onClick={() => setConfirmRemoveSectionId(section.sectionId)}>
                               Remove
@@ -480,6 +511,20 @@ export function MonthView({ month }: { month: Month }) {
           danger
           onConfirm={() => removeSection(confirmRemoveSectionId)}
           onCancel={() => setConfirmRemoveSectionId(null)}
+        />
+      )}
+
+      {confirmMoveSectionId && (
+        <ConfirmDialog
+          title={`Move ${sectionName(confirmMoveSectionId)}?`}
+          message={`All ${
+            pm.sections.find((s) => s.sectionId === confirmMoveSectionId)?.items.length ?? 0
+          } expense(s) in this section move from ${PERSON_LABELS[person]}'s salary to ${PERSON_LABELS[otherPerson]}'s, for ${monthLabel(
+            month.id,
+          )} only.`}
+          confirmLabel="Move"
+          onConfirm={() => moveSection(confirmMoveSectionId)}
+          onCancel={() => setConfirmMoveSectionId(null)}
         />
       )}
 
