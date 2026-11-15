@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { ChangePasswordDialog } from '../components/ChangePasswordDialog'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { NotificationsCard } from '../components/NotificationsCard'
 import { PromptDialog } from '../components/PromptDialog'
 import { downloadFile, fullBackupJson, monthsToCsv, parseBackupJson } from '../lib/export'
 import { clearSessionUnlock } from '../lib/session'
@@ -150,6 +151,12 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSu
             </button>
           ))}
         </div>
+      </section>
+
+      {/* Notifications */}
+      <section>
+        <h2 className="mb-2 text-lg font-semibold">Notifications</h2>
+        <NotificationsCard />
       </section>
 
       {/* Security */}

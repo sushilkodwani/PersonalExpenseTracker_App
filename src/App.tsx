@@ -12,6 +12,8 @@ import { MonthListScreen } from './screens/MonthListScreen'
 import { MonthView } from './screens/MonthView'
 import { NewMonthWizard } from './screens/NewMonthWizard'
 import { isSessionUnlocked } from './lib/session'
+import { ensureSubscriptionSaved } from './lib/push'
+import { loadStoreConfig } from './lib/store'
 import { PeopleScreen } from './screens/PeopleScreen'
 import { PersonLedgerScreen } from './screens/PersonLedgerScreen'
 import { PinGate } from './screens/PinGate'
@@ -51,6 +53,7 @@ export default function App() {
     resolveConflict,
     role,
     canEdit,
+    currentUserEmail,
   } = useApp()
   const [tab, setTab] = useState<Tab>('month')
   const [showingDetail, setShowingDetail] = useState(false)
@@ -70,6 +73,40 @@ export default function App() {
   useEffect(() => {
     if (monthId) void loadMonth(monthId)
   }, [monthId, loadMonth])
+
+  // Tapping a notification opens the app at ?month=YYYY-MM / ?view=people, or —
+  // when the app is already open — the service worker posts the same target.
+  useEffect(() => {
+    function openTarget(target: { monthId?: string | null; view?: string | null }) {
+      setSubScreen(null)
+      if (target.monthId) {
+        setMonthId(target.monthId)
+        setShowingDetail(true)
+        setTab('month')
+      } else if (target.view === 'people') {
+        setContactId(null)
+        setTab('people')
+      }
+    }
+    const params = new URLSearchParams(window.location.search)
+    if (params.has('month') || params.has('view')) {
+      openTarget({ monthId: params.get('month'), view: params.get('view') })
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'open') openTarget(e.data)
+    }
+    navigator.serviceWorker?.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker?.removeEventListener('message', onMessage)
+  }, [])
+
+  // Browsers occasionally rotate push subscriptions; re-save if it changed.
+  useEffect(() => {
+    const cfg = loadStoreConfig()
+    if (storeKind === 'github' && cfg?.kind === 'github' && currentUserEmail) {
+      void ensureSubscriptionSaved(cfg, currentUserEmail)
+    }
+  }, [storeKind, currentUserEmail])
 
   if (!ready) {
     return <div className="flex min-h-screen items-center justify-center muted">Loading…</div>

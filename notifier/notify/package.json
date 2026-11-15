@@ -1,0 +1,9 @@
+{
+  "name": "expense-tracker-notifier",
+  "private": true,
+  "type": "module",
+  "description": "Sends Web Push notifications when expense data changes. Runs in the data repo's GitHub Action.",
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

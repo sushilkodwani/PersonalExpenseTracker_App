@@ -1,4 +1,5 @@
 import type { Ledger, Month, Settings } from '../types'
+import { getSavedEmail } from './auth'
 import {
   deleteFile,
   getJsonFile,
@@ -135,6 +136,17 @@ class LocalStore implements DataStore {
 // path; a stale sha means another device wrote first, which surfaces as a
 // ConflictError rather than an overwrite (unless the caller forces it).
 
+/**
+ * Appends an "Actor: <email>" trailer to a commit message. Every device may
+ * share one token, so the git author can't tell people apart — the notifier
+ * reads this trailer to know who made a change (and not notify them about it).
+ * The history screen only shows the first line, so this stays out of the UI.
+ */
+function withActor(subject: string): string {
+  const email = getSavedEmail()
+  return email ? `${subject}\n\nActor: ${email}` : subject
+}
+
 const SETTINGS_PATH = 'settings.json'
 const LEDGER_PATH = 'ledger.json'
 const monthPath = (id: string) => `data/${id}.json`
@@ -157,7 +169,8 @@ class GitHubStore implements DataStore {
     this.cfg = cfg
   }
 
-  private async put(path: string, data: unknown, message: string, force?: boolean): Promise<void> {
+  private async put(path: string, data: unknown, subject: string, force?: boolean): Promise<void> {
+    const message = withActor(subject)
     try {
       const newSha = await putJsonFile(this.cfg, path, data, message, this.shas.get(path))
       this.shas.set(path, newSha)
@@ -223,7 +236,7 @@ class GitHubStore implements DataStore {
       if (!current) return
       sha = current.sha
     }
-    await deleteFile(this.cfg, path, `Delete ${monthId}`, sha)
+    await deleteFile(this.cfg, path, withActor(`Delete ${monthId}`), sha)
     this.shas.delete(path)
   }
 

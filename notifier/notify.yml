@@ -1,0 +1,57 @@
+# Copy this file into the PRIVATE DATA repo as .github/workflows/notify.yml
+# (not into the app repo). See notifier/README.md.
+name: Notify on changes
+
+on:
+  push:
+    # Only data saves. The notifier's own commits touch push/ and are skipped.
+    paths:
+      - 'data/**'
+      - 'ledger.json'
+  workflow_dispatch:
+    inputs:
+      message:
+        description: 'Send this test message to every subscribed device'
+        default: 'Test notification from Expense Tracker 👋'
+
+permissions:
+  contents: write
+
+# Batching: each save is a commit. A newer push cancels a run that is still
+# waiting, so a burst of edits ends in ONE notification describing all of them.
+concurrency:
+  group: notify
+  cancel-in-progress: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wait for the edit burst to settle
+        if: github.event_name == 'push'
+        run: sleep 90
+
+      - uses: actions/checkout@v4
+        with:
+          # Latest tip of the branch, not the commit that triggered this run.
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install web-push
+        working-directory: notify
+        run: npm install --no-audit --no-fund
+
+      - name: Send notifications
+        run: node notify/notify.mjs
+        env:
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          ACTOR_NAMES: ${{ vars.ACTOR_NAMES }}
+          BEFORE_SHA: ${{ github.event.before }}
+          TEST_MESSAGE: ${{ github.event.inputs.message }}
