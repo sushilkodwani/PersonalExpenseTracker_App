@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { AppProvider } from './store/AppContext.tsx'
+import { UpdatePrompt } from './components/UpdatePrompt.tsx'
 import { ThemeProvider } from './store/ThemeContext.tsx'
 
 createRoot(document.getElementById('root')!).render(
@@ -10,6 +11,7 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <AppProvider>
         <App />
+        <UpdatePrompt />
       </AppProvider>
     </ThemeProvider>
   </StrictMode>,

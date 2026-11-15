@@ -58,6 +58,8 @@ interface AppState {
   monthAtCommit: (monthId: string, sha: string) => Promise<Month | null>
   restoreMonth: (month: Month) => Promise<void>
   importBackup: (settings: Settings, months: Record<string, Month>) => Promise<void>
+  /** Sends any debounced saves immediately and waits for all saves; false if any failed. */
+  flushSaves: () => Promise<boolean>
   clearError: () => void
 }
 
@@ -154,14 +156,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMonths({})
   }, [])
 
-  const persist = useCallback((key: string, fn: () => Promise<void>) => {
+  // Debounced saves waiting to run, and saves currently in flight — tracked so
+  // flushSaves() can push everything out before the page reloads.
+  const queuedSaves = useRef<Record<string, () => Promise<void>>>({})
+  const inFlight = useRef(new Set<Promise<boolean>>())
+
+  /** Runs the queued save for `key` now. Resolves false if it failed. */
+  const runSave = useCallback((key: string): Promise<boolean> => {
     clearTimeout(saveTimers.current[key])
-    saveTimers.current[key] = setTimeout(async () => {
+    const fn = queuedSaves.current[key]
+    delete queuedSaves.current[key]
+    if (!fn) return Promise.resolve(true)
+
+    const run = (async () => {
       setSaveState('saving')
       try {
         await fn()
         setSaveState('saved')
         setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 1500)
+        return true
       } catch (e) {
         if (e instanceof ConflictError) {
           const monthId = key.startsWith('month.') ? key.slice('month.'.length) : ''
@@ -169,14 +182,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (monthId && local) {
             setConflict({ kind: 'month', monthId, remote: e.remote as Month, local })
             setSaveState('idle')
-            return
+            return false
           }
         }
         setSaveState('error')
         setError(`Save failed: ${(e as Error).message}`)
+        return false
       }
-    }, SAVE_DEBOUNCE_MS)
+    })()
+    inFlight.current.add(run)
+    void run.finally(() => inFlight.current.delete(run))
+    return run
   }, [])
+
+  const persist = useCallback(
+    (key: string, fn: () => Promise<void>) => {
+      clearTimeout(saveTimers.current[key])
+      queuedSaves.current[key] = fn
+      saveTimers.current[key] = setTimeout(() => void runSave(key), SAVE_DEBOUNCE_MS)
+    },
+    [runSave],
+  )
+
+  const flushSaves = useCallback(async (): Promise<boolean> => {
+    const queued = Object.keys(queuedSaves.current).map(runSave)
+    const results = await Promise.all([...queued, ...inFlight.current])
+    return results.every(Boolean)
+  }, [runSave])
 
   const updateSettings = useCallback(
     (next: Settings) => {
@@ -301,6 +333,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!store || !canEdit) return
       // Cancel any in-flight debounced save so it can't recreate the file.
       clearTimeout(saveTimers.current[`month.${monthId}`])
+      delete queuedSaves.current[`month.${monthId}`]
       delete pendingMonths.current[monthId]
 
       await store.deleteMonth(monthId)
@@ -394,6 +427,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         monthAtCommit,
         restoreMonth,
         importBackup,
+        flushSaves,
         clearError: () => setError(null),
       }}
     >

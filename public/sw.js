@@ -81,8 +81,9 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
-  // The worker script itself must always come from the network.
-  if (url.pathname.endsWith('/sw.js')) return
+  // The worker script and the deployed-version marker must always come from
+  // the network — caching either would hide a new deploy.
+  if (url.pathname.endsWith('/sw.js') || url.pathname.endsWith('/version.json')) return
 
   if (request.mode === 'navigate') {
     event.respondWith(networkFirstPage(request))

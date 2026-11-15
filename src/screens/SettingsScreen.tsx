@@ -5,6 +5,7 @@ import { NotificationsCard } from '../components/NotificationsCard'
 import { PromptDialog } from '../components/PromptDialog'
 import { downloadFile, fullBackupJson, monthsToCsv, parseBackupJson } from '../lib/export'
 import { clearSessionUnlock } from '../lib/session'
+import { APP_BUILT_AT, APP_VERSION, reloadToLatest } from '../lib/version'
 import { useApp } from '../store/AppContext'
 import { useTheme, type ThemePref } from '../store/ThemeContext'
 
@@ -24,6 +25,7 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSu
     currentUserEmail,
     canEdit,
     isAdmin,
+    flushSaves,
   } = useApp()
   const { pref, setPref } = useTheme()
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
@@ -77,15 +79,10 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSu
       .catch((e) => setImportError((e as Error).message))
   }
 
-  function hardRefresh() {
-    // Clear service worker cache and reload
-    if ('caches' in window) {
-      caches.keys().then((names) => {
-        names.forEach((name) => caches.delete(name))
-      })
-    }
-    // Force reload from server
-    window.location.reload()
+  async function hardRefresh() {
+    // Same path as the update prompt: save pending edits first, then reload.
+    if (!(await flushSaves())) return
+    await reloadToLatest()
   }
 
   return (
@@ -98,6 +95,9 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSu
             Refresh app
           </button>
           <p className="mt-2 text-xs muted">Clears cache and reloads. Use this if changes aren't showing up.</p>
+          <p className="mt-2 text-xs muted">
+            Version {APP_VERSION} · built {new Date(APP_BUILT_AT).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+          </p>
         </div>
       </section>
 
