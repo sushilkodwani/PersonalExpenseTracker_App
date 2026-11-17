@@ -22,6 +22,9 @@ import { SearchScreen } from './screens/SearchScreen'
 import { SectionsScreen } from './screens/SectionsScreen'
 import { SettingsScreen, type SettingsSubScreen } from './screens/SettingsScreen'
 import { SetupScreen } from './screens/SetupScreen'
+import { DataRepoScreen } from './screens/DataRepoScreen'
+import { TOKEN_WARN_DAYS, tokenExpiryStatus } from './lib/dates'
+import { TokenGateScreen } from './screens/TokenGateScreen'
 import { useApp } from './store/AppContext'
 
 type Tab = 'month' | 'people' | 'search' | 'charts' | 'settings'
@@ -35,6 +38,7 @@ const SUB_SCREEN_TITLES: Record<NonNullable<SubScreen>, string> = {
   import: 'Import',
   history: 'History',
   access: 'Access control',
+  repo: 'Data repo',
 }
 
 export default function App() {
@@ -53,8 +57,11 @@ export default function App() {
     resolveConflict,
     role,
     canEdit,
+    isAdmin,
     currentUserEmail,
+    tokenExpired,
   } = useApp()
+  const [tokenGateDismissed, setTokenGateDismissed] = useState(false)
   const [tab, setTab] = useState<Tab>('month')
   const [showingDetail, setShowingDetail] = useState(false)
   const [subScreen, setSubScreen] = useState<SubScreen>(null)
@@ -111,6 +118,10 @@ export default function App() {
   if (!ready) {
     return <div className="flex min-h-screen items-center justify-center muted">Loading…</div>
   }
+
+  // Startup failed because GitHub rejected the token: ask for a new one rather
+  // than dropping back to setup (nothing can load without it).
+  if (!storeKind && tokenExpired) return <TokenGateScreen />
 
   if (!storeKind) return <SetupScreen />
 
@@ -226,6 +237,34 @@ export default function App() {
         </div>
       )}
 
+      {/* Token banners: rejected token (after "Not now"), or expiry coming up (admin) */}
+      {tokenExpired && tokenGateDismissed ? (
+        <button
+          className="no-print mx-4 mt-3 block w-[calc(100%-2rem)] rounded-lg bg-red-50 px-4 py-3 text-left text-sm text-red-700 dark:bg-red-950 dark:text-red-200"
+          onClick={() => setTokenGateDismissed(false)}
+        >
+          <b>The access token isn’t working.</b> Changes can’t sync until you enter a new one — tap here.
+        </button>
+      ) : (
+        (() => {
+          if (!isAdmin || storeKind !== 'github' || !settings?.tokenExpiresOn || subScreen === 'repo') return null
+          const { days, text } = tokenExpiryStatus(settings.tokenExpiresOn)
+          if (days > TOKEN_WARN_DAYS) return null
+          return (
+            <button
+              className="no-print mx-4 mt-3 block w-[calc(100%-2rem)] rounded-lg bg-amber-50 px-4 py-3 text-left text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+              onClick={() => {
+                setTab('settings')
+                setSubScreen('repo')
+              }}
+            >
+              <b>Access token: {text.toLowerCase()}.</b> Create a new token on GitHub and update it here and on every
+              other device.
+            </button>
+          )
+        })()
+      )}
+
       {/* Body */}
       {subScreen === 'sections' && <SectionsScreen />}
       {subScreen === 'categories' && <CategoriesScreen />}
@@ -234,6 +273,7 @@ export default function App() {
       {subScreen === 'import' && <ImportScreen onDone={() => monthId && openMonth(monthId)} />}
       {subScreen === 'history' && <HistoryScreen onDone={() => monthId && openMonth(monthId)} />}
       {subScreen === 'access' && <AccessControlScreen />}
+      {subScreen === 'repo' && <DataRepoScreen />}
 
       {!subScreen && (
         <>
@@ -288,6 +328,9 @@ export default function App() {
       )}
 
       {conflict && <ConflictDialog conflict={conflict} onResolve={resolveConflict} />}
+
+      {/* Token rejected mid-session (a save got 401): ask for the new token over the app. */}
+      {tokenExpired && !tokenGateDismissed && <TokenGateScreen onLater={() => setTokenGateDismissed(true)} />}
     </div>
   )
 }

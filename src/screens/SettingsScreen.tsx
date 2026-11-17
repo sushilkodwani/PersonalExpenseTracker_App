@@ -3,13 +3,14 @@ import { ChangePasswordDialog } from '../components/ChangePasswordDialog'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { NotificationsCard } from '../components/NotificationsCard'
 import { PromptDialog } from '../components/PromptDialog'
+import { formatDate, tokenExpiryStatus } from '../lib/dates'
 import { downloadFile, fullBackupJson, monthsToCsv, parseBackupJson } from '../lib/export'
 import { clearSessionUnlock } from '../lib/session'
 import { APP_BUILT_AT, APP_VERSION, reloadToLatest } from '../lib/version'
 import { useApp } from '../store/AppContext'
 import { useTheme, type ThemePref } from '../store/ThemeContext'
 
-export type SettingsSubScreen = 'sections' | 'categories' | 'recurring' | 'budgets' | 'import' | 'history' | 'access'
+export type SettingsSubScreen = 'sections' | 'categories' | 'recurring' | 'budgets' | 'import' | 'history' | 'access' | 'repo'
 
 export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSubScreen) => void }) {
   const {
@@ -235,11 +236,24 @@ export function SettingsScreen({ onNavigate }: { onNavigate: (screen: SettingsSu
       {/* Storage */}
       <section>
         <h2 className="mb-2 text-lg font-semibold">Storage</h2>
-        <div className="card p-4 text-sm">
-          <p>{storeKind === 'github' ? 'Synced to your private GitHub repo.' : 'Stored locally on this device only.'}</p>
-          <button className="mt-3 text-red-500" onClick={() => setConfirmDisconnect(true)}>
-            Disconnect storage
-          </button>
+        <div className="card divide-y divider text-sm">
+          {storeKind === 'github' && (
+            <MenuRow
+              label="Data repo"
+              hint={
+                settings.tokenExpiresOn
+                  ? `Token ${tokenExpiryStatus(settings.tokenExpiresOn).text.toLowerCase()} (${formatDate(settings.tokenExpiresOn)})`
+                  : 'Token expiry date not set'
+              }
+              onClick={() => onNavigate('repo')}
+            />
+          )}
+          <div className="p-4">
+            <p>{storeKind === 'github' ? 'Synced to your private GitHub repo.' : 'Stored locally on this device only.'}</p>
+            <button className="mt-3 text-red-500" onClick={() => setConfirmDisconnect(true)}>
+              Disconnect storage
+            </button>
+          </div>
         </div>
       </section>
 

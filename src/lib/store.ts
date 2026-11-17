@@ -39,6 +39,11 @@ export interface DataStore {
   supportsHistory(): boolean
   monthHistory(monthId: string): Promise<CommitInfo[]>
   monthAtCommit(monthId: string, sha: string): Promise<Month | null>
+  /**
+   * Swap the GitHub token in place (after the old one expired or was replaced),
+   * keeping the remembered file SHAs so pending saves don't turn into conflicts.
+   */
+  setToken?(token: string): void
 }
 
 // ---------- config persistence ----------
@@ -167,6 +172,10 @@ class GitHubStore implements DataStore {
 
   constructor(cfg: GitHubConfig) {
     this.cfg = cfg
+  }
+
+  setToken(token: string): void {
+    this.cfg = { ...this.cfg, token }
   }
 
   private async put(path: string, data: unknown, subject: string, force?: boolean): Promise<void> {

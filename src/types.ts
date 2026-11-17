@@ -53,6 +53,11 @@ export interface Settings {
    * holding the same GitHub token could bypass this via the API directly.
    */
   userAccess?: UserAccessEntry[]
+  /**
+   * Expiry date (YYYY-MM-DD) of the GitHub access token, entered by the admin.
+   * Shared by every device so everyone's app can warn before it stops working.
+   */
+  tokenExpiresOn?: string
 }
 
 export interface ExpenseItem {

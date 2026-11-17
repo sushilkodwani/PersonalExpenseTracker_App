@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { CommitInfo } from '../lib/github'
+import { GitHubApiError, verifyRepoAccess, type CommitInfo } from '../lib/github'
 import type { ExpenseItem, Ledger, Month, Person, Settings } from '../types'
 import { PEOPLE } from '../types'
 import { type AccessRole, clearSavedEmail, getSavedEmail, resolveRole } from '../lib/auth'
@@ -60,6 +60,10 @@ interface AppState {
   importBackup: (settings: Settings, months: Record<string, Month>) => Promise<void>
   /** Sends any debounced saves immediately and waits for all saves; false if any failed. */
   flushSaves: () => Promise<boolean>
+  /** GitHub rejected the token (401) — expired or replaced. */
+  tokenExpired: boolean
+  /** Verify and store a new GitHub token for this device, then resume / retry saves. */
+  replaceToken: (token: string) => Promise<void>
   clearError: () => void
 }
 
@@ -83,6 +87,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<Conflict | null>(null)
+  const [tokenExpired, setTokenExpired] = useState(false)
 
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   // Kept in a ref so persist() always writes the newest version of a month,
@@ -132,6 +137,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     initFromStore(createStore(cfg))
       .catch((e) => {
+        // A rejected token (expired or replaced) is fixable without starting
+        // over: keep the connection details and ask for the new token instead.
+        if (e instanceof GitHubApiError && e.status === 401) {
+          setTokenExpired(true)
+          return
+        }
         setError(`Could not load data: ${(e as Error).message}`)
         clearStoreConfig()
       })
@@ -185,6 +196,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return false
           }
         }
+        if (e instanceof GitHubApiError && e.status === 401) {
+          // Keep the edit queued (no timer) so it's sent once a new token is in.
+          queuedSaves.current[key] ??= fn
+          setTokenExpired(true)
+          setSaveState('error')
+          setError('Save failed — the access token expired or was changed. Enter the new token to sync your changes.')
+          return false
+        }
         setSaveState('error')
         setError(`Save failed: ${(e as Error).message}`)
         return false
@@ -209,6 +228,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const results = await Promise.all([...queued, ...inFlight.current])
     return results.every(Boolean)
   }, [runSave])
+
+  const replaceToken = useCallback(
+    async (token: string) => {
+      const cfg = loadStoreConfig()
+      if (cfg?.kind !== 'github') throw new Error('Only GitHub storage uses an access token.')
+      const next = { ...cfg, token: token.trim() }
+      await verifyRepoAccess(next) // throws a readable error for a bad token / repo
+      saveStoreConfig(next)
+      setTokenExpired(false)
+      setError(null)
+      if (store?.setToken) {
+        // Mid-session: keep everything in memory and send edits that failed.
+        store.setToken(next.token)
+        await flushSaves()
+      } else {
+        // Startup failed with the old token: load everything with the new one.
+        await initFromStore(createStore(next))
+      }
+    },
+    [store, flushSaves, initFromStore],
+  )
 
   const updateSettings = useCallback(
     (next: Settings) => {
@@ -428,6 +468,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         restoreMonth,
         importBackup,
         flushSaves,
+        tokenExpired,
+        replaceToken,
         clearError: () => setError(null),
       }}
     >
