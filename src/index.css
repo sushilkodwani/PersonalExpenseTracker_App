@@ -35,6 +35,29 @@ body {
   }
 }
 
+/*
+ * iPhone Safari sizes date / month fields from their native content and ignores
+ * width: 100%, so they spill out of cards and sheets. Dropping the native
+ * appearance and pinning the size makes them behave like every other input.
+ */
+input[type='date'],
+input[type='month'],
+input[type='time'] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2.75rem; /* appearance:none lets an empty field collapse on iOS */
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type='date']::-webkit-date-and-time-value,
+input[type='month']::-webkit-date-and-time-value,
+input[type='time']::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: left;
+}
+
 /* Print / Save-as-PDF: hide the app chrome and show only the report. */
 @media print {
   body {
